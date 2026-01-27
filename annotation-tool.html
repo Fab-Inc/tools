@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Annotation Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .progress {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .upload-section {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .upload-group {
+            margin-bottom: 20px;
+        }
+
+        .upload-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .upload-group input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .upload-group input[type="file"]:hover {
+            border-color: #4CAF50;
+        }
+
+        .btn {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #45a049;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #2196F3;
+        }
+
+        .btn-secondary:hover {
+            background: #0b7dda;
+        }
+
+        #annotationSection {
+            display: none;
+        }
+
+        .item-info {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .item-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .info-item {
+            font-size: 14px;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .status-correct {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .status-incorrect {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        .status-pending {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .pdf-viewer {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .pdf-canvas-container {
+            text-align: center;
+            margin-bottom: 15px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            padding: 20px;
+            min-height: 600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #pdfCanvas {
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 100%;
+        }
+
+        .pdf-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .page-input {
+            width: 60px;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .page-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .annotation-controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .btn-large {
+            padding: 15px 30px;
+            font-size: 16px;
+        }
+
+        .btn-correct {
+            background: #4CAF50;
+        }
+
+        .btn-correct:hover {
+            background: #45a049;
+        }
+
+        .btn-incorrect {
+            background: #f44336;
+        }
+
+        .btn-incorrect:hover {
+            background: #da190b;
+        }
+
+        .btn-nav {
+            background: #607d8b;
+        }
+
+        .btn-nav:hover {
+            background: #546e7a;
+        }
+
+        .export-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .message-error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef5350;
+        }
+
+        .message-warning {
+            background: #fff3e0;
+            color: #e65100;
+            border: 1px solid #ff9800;
+        }
+
+        .message-info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #2196F3;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .help-text {
+            font-size: 13px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .keyboard-shortcuts {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+        }
+
+        .keyboard-shortcuts kbd {
+            background: #f5f5f5;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: monospace;
+        }
+
+        /* Annotation Fields Styling */
+        .annotation-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .field-group {
+            background: #fafafa;
+            padding: 12px 16px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .field-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #444;
+            font-size: 14px;
+        }
+
+        .field-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .field-group select:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+
+        .field-group input[type="text"],
+        .field-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .field-group input[type="text"]:focus,
+        .field-group textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+
+        .field-group textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+
+        .other-input {
+            margin-top: 8px;
+            display: none;
+        }
+
+        .other-input.visible {
+            display: block;
+        }
+
+        .other-input input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #4CAF50;
+            border-radius: 4px;
+            font-size: 14px;
+            background: #f1f8e9;
+        }
+
+        .other-input input:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
+        }
+
+        .other-input input::placeholder {
+            color: #81c784;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #4CAF50;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PDF Annotation Tool</h1>
+            <div class="progress" id="progressText">Upload files to begin</div>
+        </header>
+
+        <div id="uploadSection" class="upload-section">
+            <div class="upload-group">
+                <label for="csvUpload">1. Upload CSV File</label>
+                <input type="file" id="csvUpload" accept=".csv" />
+                <p class="help-text">CSV must contain: id, category, resource_path columns</p>
+            </div>
+
+            <div class="upload-group">
+                <label for="pdfUpload">2. Upload PDF Files</label>
+                <input type="file" id="pdfUpload" accept=".pdf" multiple />
+                <p class="help-text">Select all PDF files referenced in the CSV</p>
+            </div>
+
+            <div id="uploadMessages"></div>
+
+            <button class="btn" id="startBtn" disabled>Start Annotation</button>
+
+            <div class="keyboard-shortcuts">
+                <strong>Keyboard Shortcuts:</strong>
+                <kbd>←</kbd>/<kbd>→</kbd> Navigate Items
+            </div>
+        </div>
+
+        <div id="annotationSection">
+            <div class="item-info">
+                <div class="item-info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Item:</span>
+                        <span class="info-value" id="itemNumber">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">ID:</span>
+                        <span class="info-value" id="itemId">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Category:</span>
+                        <span class="category-badge" id="itemCategory">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Status:</span>
+                        <span class="status-badge status-pending" id="itemStatus">Not annotated</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pdf-viewer">
+                <div class="pdf-canvas-container">
+                    <canvas id="pdfCanvas"></canvas>
+                    <div id="pdfMessage" class="loading" style="display:none;"></div>
+                </div>
+
+                <div class="pdf-controls">
+                    <div class="control-group">
+                        <button class="control-btn" id="prevPageBtn">◄ Page</button>
+                        <span class="page-info" id="pageInfo">Page - of -</span>
+                        <button class="control-btn" id="nextPageBtn">Page ►</button>
+                    </div>
+                    <div class="control-group">
+                        <span class="page-info">Go to page:</span>
+                        <input type="number" class="page-input" id="pageInput" min="1" placeholder="1">
+                    </div>
+                    <div class="control-group">
+                        <button class="control-btn" id="zoomOutBtn">-</button>
+                        <span class="page-info" id="zoomInfo">100%</span>
+                        <button class="control-btn" id="zoomInBtn">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="annotation-controls">
+                <div class="button-group">
+                    <button class="btn btn-nav btn-large" id="prevItemBtn">◄ Previous Item</button>
+                    <button class="btn btn-correct btn-large" id="correctBtn">✓ Correct</button>
+                    <button class="btn btn-incorrect btn-large" id="incorrectBtn">✗ Incorrect</button>
+                    <button class="btn btn-nav btn-large" id="nextItemBtn">Next Item ►</button>
+                </div>
+
+                <div class="section-title">Material Annotation Fields</div>
+
+                <div class="annotation-fields">
+                    <!-- Material Type -->
+                    <div class="field-group">
+                        <label for="materialTypeSelect">Material Type</label>
+                        <select id="materialTypeSelect">
+                            <option value="">-- Select --</option>
+                            <option value="Textbook">Textbook</option>
+                            <option value="Lesson Plan">Lesson Plan</option>
+                            <option value="Storybook">Storybook</option>
+                            <option value="Non-fiction/Reference Book">Non-fiction/Reference Book</option>
+                            <option value="Worksheet">Worksheet</option>
+                            <option value="Teacher Guide">Teacher Guide</option>
+                            <option value="Multimedia Resource">Multimedia Resource</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div class="other-input" id="materialTypeOther">
+                            <input type="text" id="materialTypeOtherInput" placeholder="Specify material type...">
+                        </div>
+                    </div>
+
+                    <!-- Language of Instruction -->
+                    <div class="field-group">
+                        <label for="languageSelect">Language of Instruction</label>
+                        <select id="languageSelect">
+                            <option value="">-- Select --</option>
+                            <option value="English">English</option>
+                            <option value="Not English">Not English</option>
+                            <option value="Other">Other (specify language)</option>
+                        </select>
+                        <div class="other-input" id="languageOther">
+                            <input type="text" id="languageOtherInput" placeholder="Specify language name...">
+                        </div>
+                    </div>
+
+                    <!-- Grade Level -->
+                    <div class="field-group">
+                        <label for="gradeLevelSelect">Grade Level</label>
+                        <select id="gradeLevelSelect">
+                            <option value="">-- Select --</option>
+                            <option value="Early Years">Early Years</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11">11</option>
+                            <option value="12">12</option>
+                            <option value="13">13</option>
+                            <option value="Mixed">Mixed</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div class="other-input" id="gradeLevelOther">
+                            <input type="text" id="gradeLevelOtherInput" placeholder="Specify grade level...">
+                        </div>
+                    </div>
+
+                    <!-- Education Level -->
+                    <div class="field-group">
+                        <label for="educationLevelSelect">Education Level</label>
+                        <select id="educationLevelSelect">
+                            <option value="">-- Select --</option>
+                            <option value="Lower Primary">Lower Primary</option>
+                            <option value="Upper Primary">Upper Primary</option>
+                            <option value="Secondary">Secondary</option>
+                            <option value="Higher Ed">Higher Ed</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div class="other-input" id="educationLevelOther">
+                            <input type="text" id="educationLevelOtherInput" placeholder="Specify education level...">
+                        </div>
+                    </div>
+
+                    <!-- Primary User -->
+                    <div class="field-group">
+                        <label for="primaryUserSelect">Primary User</label>
+                        <select id="primaryUserSelect">
+                            <option value="">-- Select --</option>
+                            <option value="Student">Student</option>
+                            <option value="Teacher">Teacher</option>
+                            <option value="Both">Both</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div class="other-input" id="primaryUserOther">
+                            <input type="text" id="primaryUserOtherInput" placeholder="Specify primary user...">
+                        </div>
+                    </div>
+
+                    <!-- Subject -->
+                    <div class="field-group">
+                        <label for="subjectSelect">Subject</label>
+                        <select id="subjectSelect">
+                            <option value="">-- Select --</option>
+                            <option value="Literacy">Literacy</option>
+                            <option value="Maths">Maths</option>
+                            <option value="Science">Science</option>
+                            <option value="Social Studies">Social Studies</option>
+                            <option value="MFL">MFL (Modern Foreign Languages)</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div class="other-input" id="subjectOther">
+                            <input type="text" id="subjectOtherInput" placeholder="Specify subject...">
+                        </div>
+                    </div>
+
+                    <!-- Country -->
+                    <div class="field-group">
+                        <label for="countrySelect">Country</label>
+                        <select id="countrySelect">
+                            <option value="">-- Select --</option>
+                            <option value="UK">UK</option>
+                            <option value="USA">USA</option>
+                            <option value="India">India</option>
+                            <option value="Kenya">Kenya</option>
+                            <option value="Nigeria">Nigeria</option>
+                            <option value="South Africa">South Africa</option>
+                            <option value="Australia">Australia</option>
+                            <option value="Canada">Canada</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div class="other-input" id="countryOther">
+                            <input type="text" id="countryOtherInput" placeholder="Specify country name...">
+                        </div>
+                    </div>
+
+                    <!-- Licensing -->
+                    <div class="field-group">
+                        <label for="licensingSelect">Licensing</label>
+                        <select id="licensingSelect">
+                            <option value="">-- Select --</option>
+                            <option value="CC BY">CC BY</option>
+                            <option value="CC BY-SA">CC BY-SA</option>
+                            <option value="CC BY-NC">CC BY-NC</option>
+                            <option value="CC BY-ND">CC BY-ND</option>
+                            <option value="CC BY-NC-SA">CC BY-NC-SA</option>
+                            <option value="CC BY-NC-ND">CC BY-NC-ND</option>
+                            <option value="All Rights Reserved">All Rights Reserved</option>
+                            <option value="Unknown">Unknown</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div class="other-input" id="licensingOther">
+                            <input type="text" id="licensingOtherInput" placeholder="Specify licensing...">
+                        </div>
+                    </div>
+
+                    <!-- Other Comments -->
+                    <div class="field-group full-width">
+                        <label for="otherCommentsInput">Other Comments</label>
+                        <textarea id="otherCommentsInput" placeholder="E.g. no educational value, multimodal content, diagrams present, publisher name..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="export-section">
+                <button class="btn btn-secondary btn-large" id="downloadBtn">Download Annotated CSV</button>
+                <p class="help-text">Download CSV with annotations to save your work</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script>
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // Field configuration - defines all annotation fields
+        const fieldConfig = [
+            { id: 'materialType', selectId: 'materialTypeSelect', otherId: 'materialTypeOther', otherInputId: 'materialTypeOtherInput', csvColumn: 'material_type' },
+            { id: 'language', selectId: 'languageSelect', otherId: 'languageOther', otherInputId: 'languageOtherInput', csvColumn: 'language_of_instruction' },
+            { id: 'gradeLevel', selectId: 'gradeLevelSelect', otherId: 'gradeLevelOther', otherInputId: 'gradeLevelOtherInput', csvColumn: 'grade_level' },
+            { id: 'educationLevel', selectId: 'educationLevelSelect', otherId: 'educationLevelOther', otherInputId: 'educationLevelOtherInput', csvColumn: 'education_level' },
+            { id: 'primaryUser', selectId: 'primaryUserSelect', otherId: 'primaryUserOther', otherInputId: 'primaryUserOtherInput', csvColumn: 'primary_user' },
+            { id: 'subject', selectId: 'subjectSelect', otherId: 'subjectOther', otherInputId: 'subjectOtherInput', csvColumn: 'subject' },
+            { id: 'country', selectId: 'countrySelect', otherId: 'countryOther', otherInputId: 'countryOtherInput', csvColumn: 'country' },
+            { id: 'licensing', selectId: 'licensingSelect', otherId: 'licensingOther', otherInputId: 'licensingOtherInput', csvColumn: 'licensing' }
+        ];
+
+        // Application state
+        const state = {
+            csvData: [],
+            pdfFiles: new Map(),
+            annotations: {},
+            fieldData: {}, // Stores all field values by item ID
+            currentIndex: 0,
+            currentPage: 1,
+            currentZoom: 1.0,
+            pdfDoc: null,
+            totalPages: 0,
+            zoomLevels: [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+        };
+
+        // Initialize fieldData storage for each field
+        fieldConfig.forEach(field => {
+            state.fieldData[field.id] = {};
+        });
+        state.fieldData.otherComments = {};
+
+        // DOM elements
+        const elements = {
+            csvUpload: document.getElementById('csvUpload'),
+            pdfUpload: document.getElementById('pdfUpload'),
+            startBtn: document.getElementById('startBtn'),
+            uploadSection: document.getElementById('uploadSection'),
+            annotationSection: document.getElementById('annotationSection'),
+            uploadMessages: document.getElementById('uploadMessages'),
+            progressText: document.getElementById('progressText'),
+            itemNumber: document.getElementById('itemNumber'),
+            itemId: document.getElementById('itemId'),
+            itemCategory: document.getElementById('itemCategory'),
+            itemStatus: document.getElementById('itemStatus'),
+            pdfCanvas: document.getElementById('pdfCanvas'),
+            pdfMessage: document.getElementById('pdfMessage'),
+            pageInfo: document.getElementById('pageInfo'),
+            pageInput: document.getElementById('pageInput'),
+            zoomInfo: document.getElementById('zoomInfo'),
+            prevPageBtn: document.getElementById('prevPageBtn'),
+            nextPageBtn: document.getElementById('nextPageBtn'),
+            zoomInBtn: document.getElementById('zoomInBtn'),
+            zoomOutBtn: document.getElementById('zoomOutBtn'),
+            prevItemBtn: document.getElementById('prevItemBtn'),
+            nextItemBtn: document.getElementById('nextItemBtn'),
+            correctBtn: document.getElementById('correctBtn'),
+            incorrectBtn: document.getElementById('incorrectBtn'),
+            otherCommentsInput: document.getElementById('otherCommentsInput'),
+            downloadBtn: document.getElementById('downloadBtn')
+        };
+
+        // Add field elements to elements object
+        fieldConfig.forEach(field => {
+            elements[field.selectId] = document.getElementById(field.selectId);
+            elements[field.otherId] = document.getElementById(field.otherId);
+            elements[field.otherInputId] = document.getElementById(field.otherInputId);
+        });
+
+        // Setup "Other" field visibility handlers
+        fieldConfig.forEach(field => {
+            const select = elements[field.selectId];
+            const otherDiv = elements[field.otherId];
+            
+            select.addEventListener('change', () => {
+                if (select.value === 'Other') {
+                    otherDiv.classList.add('visible');
+                    elements[field.otherInputId].focus();
+                } else {
+                    otherDiv.classList.remove('visible');
+                    elements[field.otherInputId].value = '';
+                }
+            });
+        });
+
+        // Utility: Extract filename from path
+        function extractFilename(path) {
+            return path.split('/').pop().split('\\').pop();
+        }
+
+        // Utility: Show message
+        function showMessage(text, type = 'info') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message message-${type}`;
+            messageDiv.textContent = text;
+            elements.uploadMessages.appendChild(messageDiv);
+        }
+
+        // Utility: Clear messages
+        function clearMessages() {
+            elements.uploadMessages.innerHTML = '';
+        }
+
+        // Get field value (handles "Other" option)
+        function getFieldValue(field) {
+            const select = elements[field.selectId];
+            const otherInput = elements[field.otherInputId];
+            
+            if (select.value === 'Other' && otherInput.value.trim()) {
+                return 'Other: ' + otherInput.value.trim();
+            }
+            return select.value;
+        }
+
+        // Set field value (handles "Other" option)
+        function setFieldValue(field, value) {
+            const select = elements[field.selectId];
+            const otherDiv = elements[field.otherId];
+            const otherInput = elements[field.otherInputId];
+            
+            if (value && value.startsWith('Other: ')) {
+                select.value = 'Other';
+                otherDiv.classList.add('visible');
+                otherInput.value = value.substring(7);
+            } else {
+                // Check if value exists in dropdown options
+                const options = Array.from(select.options).map(o => o.value);
+                if (options.includes(value)) {
+                    select.value = value;
+                } else if (value) {
+                    // Value doesn't exist in dropdown, treat as "Other"
+                    select.value = 'Other';
+                    otherDiv.classList.add('visible');
+                    otherInput.value = value;
+                } else {
+                    select.value = '';
+                }
+                
+                if (select.value !== 'Other') {
+                    otherDiv.classList.remove('visible');
+                    otherInput.value = '';
+                }
+            }
+        }
+
+        // Save all field values for current item
+        function saveCurrentFields() {
+            if (state.currentIndex >= 0 && state.currentIndex < state.csvData.length) {
+                const currentItem = state.csvData[state.currentIndex];
+                
+                // Save dropdown fields
+                fieldConfig.forEach(field => {
+                    const value = getFieldValue(field);
+                    if (value) {
+                        state.fieldData[field.id][currentItem.id] = value;
+                    } else {
+                        delete state.fieldData[field.id][currentItem.id];
+                    }
+                });
+                
+                // Save other comments
+                const comments = elements.otherCommentsInput.value.trim();
+                if (comments) {
+                    state.fieldData.otherComments[currentItem.id] = comments;
+                } else {
+                    delete state.fieldData.otherComments[currentItem.id];
+                }
+            }
+        }
+
+        // Load all field values for an item
+        function loadFieldValues(itemId) {
+            // Load dropdown fields
+            fieldConfig.forEach(field => {
+                const value = state.fieldData[field.id][itemId] || '';
+                setFieldValue(field, value);
+            });
+            
+            // Load other comments
+            elements.otherCommentsInput.value = state.fieldData.otherComments[itemId] || '';
+        }
+
+        // Handle CSV upload
+        elements.csvUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            clearMessages();
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (!results.data || results.data.length === 0) {
+                        showMessage('CSV file is empty', 'error');
+                        return;
+                    }
+
+                    // Validate columns
+                    const firstRow = results.data[0];
+                    if (!firstRow.id || !firstRow.category || !firstRow.resource_path) {
+                        showMessage('CSV must contain id, category, and resource_path columns', 'error');
+                        return;
+                    }
+
+                    state.csvData = results.data;
+                    showMessage(`CSV loaded: ${state.csvData.length} items`, 'info');
+                    checkReadyToStart();
+                },
+                error: (error) => {
+                    showMessage(`Error parsing CSV: ${error.message}`, 'error');
+                }
+            });
+        });
+
+        // Handle PDF upload
+        elements.pdfUpload.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+
+            clearMessages();
+            state.pdfFiles.clear();
+
+            files.forEach(file => {
+                state.pdfFiles.set(file.name, file);
+            });
+
+            showMessage(`PDFs loaded: ${state.pdfFiles.size} files`, 'info');
+            checkReadyToStart();
+        });
+
+        // Check if ready to start
+        function checkReadyToStart() {
+            if (state.csvData.length > 0 && state.pdfFiles.size > 0) {
+                elements.startBtn.disabled = false;
+            }
+        }
+
+        // Start annotation
+        elements.startBtn.addEventListener('click', () => {
+            // Match PDFs to CSV
+            let matchedCount = 0;
+            let missingPdfs = [];
+
+            state.csvData.forEach(row => {
+                const filename = extractFilename(row.resource_path);
+                if (state.pdfFiles.has(filename)) {
+                    matchedCount++;
+                } else {
+                    missingPdfs.push(filename);
+                }
+            });
+
+            if (missingPdfs.length > 0) {
+                showMessage(`Warning: ${missingPdfs.length} PDFs not found. You can still annotate based on category.`, 'warning');
+            }
+
+            // Switch to annotation view
+            elements.uploadSection.style.display = 'none';
+            elements.annotationSection.style.display = 'block';
+
+            // Load first item
+            loadItem(0);
+        });
+
+        // Update progress
+        function updateProgress() {
+            const annotated = Object.keys(state.annotations).length;
+            const total = state.csvData.length;
+            const percentage = total > 0 ? ((annotated / total) * 100).toFixed(1) : 0;
+            elements.progressText.textContent = `Progress: ${annotated}/${total} annotated (${percentage}%)`;
+        }
+
+        // Load item
+        async function loadItem(index) {
+            if (index < 0 || index >= state.csvData.length) return;
+
+            // Save fields from previous item
+            saveCurrentFields();
+
+            state.currentIndex = index;
+            const item = state.csvData[index];
+
+            // Update item info
+            elements.itemNumber.textContent = `${index + 1} of ${state.csvData.length}`;
+            elements.itemId.textContent = item.id;
+            elements.itemCategory.textContent = item.category;
+
+            // Update status
+            const annotation = state.annotations[item.id];
+            if (annotation) {
+                elements.itemStatus.textContent = annotation === 'correct' ? '✓ Correct' : '✗ Incorrect';
+                elements.itemStatus.className = `status-badge ${annotation === 'correct' ? 'status-correct' : 'status-incorrect'}`;
+            } else {
+                elements.itemStatus.textContent = 'Not annotated';
+                elements.itemStatus.className = 'status-badge status-pending';
+            }
+
+            // Load all field values
+            loadFieldValues(item.id);
+
+            // Update navigation buttons
+            elements.prevItemBtn.disabled = index === 0;
+            elements.nextItemBtn.disabled = index === state.csvData.length - 1;
+
+            // Load PDF
+            const filename = extractFilename(item.resource_path);
+            const pdfFile = state.pdfFiles.get(filename);
+
+            if (pdfFile) {
+                await loadPDF(pdfFile);
+            } else {
+                showPDFMessage(`PDF not found: ${filename}`);
+            }
+
+            updateProgress();
+        }
+
+        // Load PDF
+        async function loadPDF(file) {
+            try {
+                showPDFMessage('Loading PDF...');
+                elements.pdfCanvas.style.display = 'none';
+
+                const arrayBuffer = await file.arrayBuffer();
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                state.pdfDoc = await loadingTask.promise;
+                state.totalPages = state.pdfDoc.numPages;
+                state.currentPage = 1;
+                state.currentZoom = 1.0;
+
+                await renderPage();
+
+                elements.pdfCanvas.style.display = 'block';
+                elements.pdfMessage.style.display = 'none';
+            } catch (error) {
+                showPDFMessage(`Error loading PDF: ${error.message}`);
+            }
+        }
+
+        // Render page
+        async function renderPage() {
+            if (!state.pdfDoc) return;
+
+            try {
+                const page = await state.pdfDoc.getPage(state.currentPage);
+                const viewport = page.getViewport({ scale: state.currentZoom });
+
+                const canvas = elements.pdfCanvas;
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+
+                await page.render(renderContext).promise;
+
+                // Update controls
+                elements.pageInfo.textContent = `Page ${state.currentPage} of ${state.totalPages}`;
+                elements.pageInput.value = state.currentPage;
+                elements.pageInput.max = state.totalPages;
+                elements.zoomInfo.textContent = `${Math.round(state.currentZoom * 100)}%`;
+                elements.prevPageBtn.disabled = state.currentPage === 1;
+                elements.nextPageBtn.disabled = state.currentPage === state.totalPages;
+
+                const currentZoomIndex = state.zoomLevels.indexOf(state.currentZoom);
+                elements.zoomOutBtn.disabled = currentZoomIndex === 0;
+                elements.zoomInBtn.disabled = currentZoomIndex === state.zoomLevels.length - 1;
+            } catch (error) {
+                showPDFMessage(`Error rendering page: ${error.message}`);
+            }
+        }
+
+        // Show PDF message
+        function showPDFMessage(text) {
+            elements.pdfMessage.textContent = text;
+            elements.pdfMessage.style.display = 'block';
+            elements.pdfCanvas.style.display = 'none';
+        }
+
+        // Page navigation
+        elements.prevPageBtn.addEventListener('click', () => {
+            if (state.currentPage > 1) {
+                state.currentPage--;
+                renderPage();
+            }
+        });
+
+        elements.nextPageBtn.addEventListener('click', () => {
+            if (state.currentPage < state.totalPages) {
+                state.currentPage++;
+                renderPage();
+            }
+        });
+
+        // Page input handler
+        elements.pageInput.addEventListener('change', (e) => {
+            const pageNum = parseInt(e.target.value);
+            if (pageNum && pageNum >= 1 && pageNum <= state.totalPages) {
+                state.currentPage = pageNum;
+                renderPage();
+            } else {
+                elements.pageInput.value = state.currentPage;
+            }
+        });
+
+        elements.pageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.target.blur();
+            }
+        });
+
+        // Zoom controls
+        elements.zoomInBtn.addEventListener('click', () => {
+            const currentIndex = state.zoomLevels.indexOf(state.currentZoom);
+            if (currentIndex < state.zoomLevels.length - 1) {
+                state.currentZoom = state.zoomLevels[currentIndex + 1];
+                renderPage();
+            }
+        });
+
+        elements.zoomOutBtn.addEventListener('click', () => {
+            const currentIndex = state.zoomLevels.indexOf(state.currentZoom);
+            if (currentIndex > 0) {
+                state.currentZoom = state.zoomLevels[currentIndex - 1];
+                renderPage();
+            }
+        });
+
+        // Item navigation
+        elements.prevItemBtn.addEventListener('click', () => {
+            loadItem(state.currentIndex - 1);
+        });
+
+        elements.nextItemBtn.addEventListener('click', () => {
+            loadItem(state.currentIndex + 1);
+        });
+
+        // Annotation
+        elements.correctBtn.addEventListener('click', () => {
+            annotate('correct');
+        });
+
+        elements.incorrectBtn.addEventListener('click', () => {
+            annotate('incorrect');
+        });
+
+        function annotate(value) {
+            const item = state.csvData[state.currentIndex];
+            state.annotations[item.id] = value;
+
+            // Update status display
+            elements.itemStatus.textContent = value === 'correct' ? '✓ Correct' : '✗ Incorrect';
+            elements.itemStatus.className = `status-badge ${value === 'correct' ? 'status-correct' : 'status-incorrect'}`;
+
+            updateProgress();
+
+            // Auto-advance to next item if not at the end
+            if (state.currentIndex < state.csvData.length - 1) {
+                setTimeout(() => loadItem(state.currentIndex + 1), 300);
+            }
+        }
+
+        // Download CSV
+        elements.downloadBtn.addEventListener('click', () => {
+            // Save current fields before exporting
+            saveCurrentFields();
+
+            // Add annotation and all field columns to CSV data
+            const annotatedData = state.csvData.map(row => {
+                const newRow = {
+                    ...row,
+                    annotation: state.annotations[row.id] || ''
+                };
+                
+                // Add all dropdown fields
+                fieldConfig.forEach(field => {
+                    newRow[field.csvColumn] = state.fieldData[field.id][row.id] || '';
+                });
+                
+                // Add other comments
+                newRow['other_comments'] = state.fieldData.otherComments[row.id] || '';
+                
+                return newRow;
+            });
+
+            // Generate CSV
+            const csv = Papa.unparse(annotatedData);
+
+            // Trigger download
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'annotated_data.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Only handle shortcuts when annotation section is visible
+            if (elements.annotationSection.style.display !== 'block') return;
+
+            // Don't handle shortcuts if user is typing in any input field
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+            // Prevent default for item navigation keys only
+            if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+            }
+
+            switch(e.key) {
+                case 'ArrowLeft':
+                    if (state.currentIndex > 0) loadItem(state.currentIndex - 1);
+                    break;
+                case 'ArrowRight':
+                    if (state.currentIndex < state.csvData.length - 1) loadItem(state.currentIndex + 1);
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>
