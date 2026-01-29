@@ -293,6 +293,9 @@
             border: 2px solid transparent;
             transition: all 0.3s ease;
             position: relative;
+            min-width: 0;
+            width: 100%;
+            overflow: hidden;
         }
 
         .text-panel.selected {
@@ -346,10 +349,13 @@
             color: #c0c0c0;
             max-height: 400px;
             overflow-y: auto;
+            overflow-x: hidden;
             word-wrap: break-word;
+            overflow-wrap: break-word;
+            width: 100%;
         }
 
-        .text-content h1, .text-content h2, .text-content h3,
+        .text-content h1, .text-content h2, .text-content h3, 
         .text-content h4, .text-content h5, .text-content h6 {
             color: #fff;
             margin-top: 1em;
@@ -378,11 +384,14 @@
             border-radius: 8px;
             overflow-x: auto;
             margin: 0.75em 0;
+            max-width: 100%;
         }
 
         .text-content pre code {
             background: none;
             padding: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
 
         .text-content ul, .text-content ol {
@@ -404,6 +413,7 @@
 
         .text-content a {
             color: #667eea;
+            word-break: break-all;
         }
 
         .text-content strong {
@@ -422,8 +432,16 @@
 
         .text-content table {
             width: 100%;
+            max-width: 100%;
             border-collapse: collapse;
             margin: 0.75em 0;
+            display: block;
+            overflow-x: auto;
+        }
+
+        .text-content img {
+            max-width: 100%;
+            height: auto;
         }
 
         .text-content th, .text-content td {
@@ -961,7 +979,7 @@
             }
 
             const headers = rows[0].map(h => h.trim());
-
+            
             // Find required column indices
             const colIndices = {
                 option_a_text: headers.findIndex(h => h.toLowerCase().includes('option_a_text')),
@@ -1016,7 +1034,7 @@
 
             dimensions = Array.from(dimensionMap.keys());
             orderedIndices = [];
-
+            
             dimensions.forEach(dim => {
                 orderedIndices.push(...dimensionMap.get(dim));
             });
@@ -1026,10 +1044,10 @@
             uploadSection.style.display = 'none';
             ratingSection.classList.add('active');
             completionScreen.classList.remove('active');
-
+            
             document.getElementById('totalCount').textContent = data.length;
             document.getElementById('totalPairs').textContent = data.length;
-
+            
             currentPosition = 0;
             previousDimensionIndex = -1;
             displayCurrentPair();
@@ -1042,7 +1060,7 @@
             // Update dimension info
             const newDimIndex = dimensions.indexOf(item.judgement_dimension);
             const dimensionChanged = newDimIndex !== previousDimensionIndex;
-
+            
             if (dimensionChanged && previousDimensionIndex !== -1) {
                 document.getElementById('dimensionBanner').classList.add('new-dimension');
                 document.getElementById('newDimensionNotice').classList.add('show');
@@ -1051,12 +1069,12 @@
                     document.getElementById('newDimensionNotice').classList.remove('show');
                 }, 3000);
             }
-
+            
             previousDimensionIndex = newDimIndex;
             currentDimensionIndex = newDimIndex;
-
+            
             document.getElementById('dimensionName').textContent = item.judgement_dimension;
-            document.getElementById('dimensionProgress').textContent =
+            document.getElementById('dimensionProgress').textContent = 
                 `Dimension ${currentDimensionIndex + 1} of ${dimensions.length}`;
 
             // Update criteria
@@ -1133,12 +1151,12 @@
         function updateProgress() {
             const ratedCount = Object.keys(judgements).length;
             const percentage = (ratedCount / data.length) * 100;
-
+            
             document.getElementById('progressBar').style.width = percentage + '%';
-            document.getElementById('progressText').textContent =
+            document.getElementById('progressText').textContent = 
                 `${ratedCount} of ${data.length} pairs rated`;
             document.getElementById('ratedCount').textContent = ratedCount;
-
+            
             // Update download button text
             const downloadBtn = document.getElementById('downloadBtn');
             if (ratedCount === 0) {
@@ -1161,7 +1179,7 @@
             completionScreen.classList.add('active');
 
             const optionACount = Object.values(judgements).filter(j => j === 'A').length;
-
+            
             document.getElementById('statTotal').textContent = data.length;
             document.getElementById('statDimensions').textContent = dimensions.length;
             document.getElementById('statOptionA').textContent = optionACount;
@@ -1180,9 +1198,9 @@
             }
 
             const ratedCount = Object.keys(judgements).length;
-
+            
             const headers = [...data[0].headers, 'chosen_option'];
-
+            
             // Rebuild CSV correctly
             const resultRows = [];
             for (let i = 0; i < data.length; i++) {
@@ -1198,12 +1216,12 @@
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-
+            
             // Add timestamp and indicate if partial
             const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
             const suffix = ratedCount < data.length ? '_partial' : '_complete';
             link.download = `pairwise_ratings${suffix}_${timestamp}.csv`;
-
+            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -1238,7 +1256,7 @@
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
             if (!ratingSection.classList.contains('active')) return;
-
+            
             // Ignore if typing in an input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
