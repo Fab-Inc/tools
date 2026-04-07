@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Workbook Review</title>
+  <title>GDI Eval Review</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -42,7 +42,7 @@
   <template v-if="!fileLoaded">
     <div class="mx-auto max-w-5xl px-6 py-12">
       <header class="mb-8">
-        <h1 class="text-4xl font-bold tracking-tight">Workbook Review</h1>
+        <h1 class="text-4xl font-bold tracking-tight">GDI Eval Review</h1>
         <p class="mt-2 text-neutral-600">
           Open a generated xlsx from your computer to start reviewing. Edit responses,
           mark examples as reviewed, then download the updated file.
@@ -69,7 +69,7 @@
             <div class="flex-1">
               <div class="font-serif text-lg font-semibold">Drop xlsx files here, or click to browse</div>
               <div class="text-sm text-neutral-600 mt-1">
-                Upload a compatible review workbook to begin.
+                Any xlsx produced by the eval generator works.
               </div>
             </div>
           </div>
@@ -135,7 +135,7 @@
                   @click="download" :disabled="!dirty">Save &darr;</button>
           <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-brand text-white hover:bg-brand-500"
                   @click="markReviewedAndNext">
-            Mark reviewed &amp; next
+            Approve &amp; next
           </button>
         </div>
       </div>
@@ -160,7 +160,7 @@
               :class="idx === currentIdx ? 'bg-brand/10' : ''"
               @click="goTo(idx)">
               <span class="w-2 h-2 rounded-full shrink-0"
-                    :class="isReviewed(rows[idx]) ? 'bg-brand' : 'bg-neutral-300'"></span>
+                    :class="qaStatusColor(rows[idx])"></span>
               <div class="min-w-0">
                 <div class="text-xs font-mono truncate">{{ fmt(rows[idx]['Example ID']) }}</div>
                 <div class="text-xs text-neutral-500 truncate">{{ fmt(rows[idx]['Subtask Name']) }}</div>
@@ -185,21 +185,37 @@
             <span v-if="current['Subject']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface text-neutral-700">
               {{ fmt(current['Subject']) }}
             </span>
-            <span v-if="current['Topic']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface text-neutral-700">
-              {{ fmt(current['Topic']) }}
+            <span v-if="current['Topic'] != null" class="inline-flex items-center text-xs">
+              <label class="font-medium text-neutral-500 mr-1">Topic:</label>
+              <input type="text" class="px-2 py-0.5 rounded border border-neutral-300 bg-white text-xs focus:border-brand focus:ring-brand"
+                     :value="fmt(current['Topic'])"
+                     @input="setField('Topic', $event.target.value)" />
             </span>
             <span v-if="current['Country']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface text-neutral-700">
               {{ fmt(current['Country']) }}
             </span>
             <span v-if="current['User Prompt Quality']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand/10 text-brand-600">
-              Quality: {{ fmt(current['User Prompt Quality']) }}
+              User Prompt Quality: {{ fmt(current['User Prompt Quality']) }}
             </span>
+          </div>
+
+          <div v-if="current['Learning Objective'] != null" class="mt-5">
+            <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Learning Objective</div>
+            <textarea
+              class="mt-1 w-full min-h-[3rem] text-sm rounded border-neutral-300 bg-white p-2 focus:border-brand focus:ring-brand"
+              :value="fmt(current['Learning Objective'])"
+              @input="setField('Learning Objective', $event.target.value)"
+            ></textarea>
           </div>
 
           <div class="mt-5 grid gap-5 lg:grid-cols-2">
             <div>
               <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Realistic user prompt</div>
-              <p class="mt-1 text-sm whitespace-pre-wrap">{{ fmt(current['Realistic User Prompt']) }}</p>
+              <textarea
+                class="mt-1 w-full min-h-[5rem] text-sm rounded border-neutral-300 bg-white p-2 focus:border-brand focus:ring-brand"
+                :value="fmt(current['Realistic User Prompt'])"
+                @input="setField('Realistic User Prompt', $event.target.value)"
+              ></textarea>
             </div>
             <div>
               <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Rendered template</div>
@@ -207,10 +223,14 @@
             </div>
           </div>
 
-          <details v-if="current['Output Expectations']" class="mt-5">
-            <summary class="text-xs font-medium uppercase tracking-wide text-neutral-500 cursor-pointer">Output expectations</summary>
-            <pre class="mt-2 text-xs whitespace-pre-wrap font-sans text-neutral-700">{{ fmt(current['Output Expectations']) }}</pre>
-          </details>
+          <div v-if="current['Output Expectations'] != null" class="mt-5">
+            <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Output expectations</div>
+            <textarea
+              class="mt-1 w-full min-h-[7rem] text-sm rounded border-neutral-300 bg-white p-2 focus:border-brand focus:ring-brand"
+              :value="fmt(current['Output Expectations'])"
+              @input="setField('Output Expectations', $event.target.value)"
+            ></textarea>
+          </div>
 
           <details v-if="current['Attachment Type'] && current['Attachment Type'] !== 'None'" class="mt-3">
             <summary class="text-xs font-medium uppercase tracking-wide text-neutral-500 cursor-pointer">
@@ -222,9 +242,13 @@
         </section>
 
         <!-- Groundtruth answer -->
-        <section v-if="current['Groundtruth Answer']" class="bg-white border border-neutral-200 rounded-xl p-5">
+        <section class="bg-white border border-neutral-200 rounded-xl p-5">
           <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Groundtruth Answer</div>
-          <p class="mt-1 text-sm whitespace-pre-wrap">{{ fmt(current['Groundtruth Answer']) }}</p>
+          <textarea
+            class="mt-1 w-full min-h-[7rem] text-sm rounded border-neutral-300 bg-white p-2 focus:border-brand focus:ring-brand"
+            :value="fmt(current['Groundtruth Answer'])"
+            @input="setField('Groundtruth Answer', $event.target.value)"
+          ></textarea>
         </section>
 
         <!-- 3-col editors -->
@@ -260,11 +284,14 @@
             :value="fmt(current['Reviewer Notes'])"
             @input="setField('Reviewer Notes', $event.target.value)"
           ></textarea>
-          <div class="mt-3 flex items-center gap-2 text-sm">
-            <input type="checkbox" id="reviewed"
-                   :checked="isReviewed(current)"
-                   @change="toggleReviewed($event.target.checked)" />
-            <label for="reviewed">Mark as reviewed</label>
+          <div class="mt-3 flex items-center gap-3 text-sm">
+            <label class="text-xs font-medium uppercase tracking-wide text-neutral-500" for="qa-status">QA Approval Status</label>
+            <select id="qa-status"
+                    class="text-sm rounded border-neutral-300 bg-white px-2 py-1 focus:border-brand focus:ring-brand"
+                    :value="qaStatus(current)"
+                    @change="setQaStatus($event.target.value)">
+              <option v-for="opt in QA_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
           </div>
         </section>
       </main>
@@ -283,10 +310,17 @@ const COLUMNS = [
   'Attachment Type','Attachment Description','Attachment Text','Attachment Media',
   'Groundtruth Answer','Rendered Prompt','User Prompt Quality','Realistic User Prompt',
   'Output Expectations','Good Response','Good Justification','Okay Response',
-  'Okay Justification','Bad Response','Bad Justification','Reviewer Notes'
+  'Okay Justification','Bad Response','Bad Justification','Reviewer Notes',
+  'QA Approval Status'
 ];
-const REVIEW_META_COLUMNS = ['Reviewed', 'Reviewed At'];
 const REQUIRED_COLUMNS = ['Example ID', 'Good Response', 'Okay Response', 'Bad Response'];
+const QA_COL = 'QA Approval Status';
+const QA_OPTIONS = [
+  { value: '',  label: 'Not reviewed' },
+  { value: 'N', label: 'N \u2014 Needs serious work' },
+  { value: 'M', label: 'M \u2014 Needs tweaking' },
+  { value: 'Y', label: 'Y \u2014 Ready to ship' }
+];
 
 function sessionTimestamp(d) {
   d = d || new Date();
@@ -358,13 +392,24 @@ createApp({
 
     const current = computed(() => rows.value[currentIdx.value] || null);
     const dirty = computed(() => JSON.stringify(rows.value) !== originalJson.value);
-    const reviewedCount = computed(() => rows.value.filter(r => isReviewed(r)).length);
+    const reviewedCount = computed(() => rows.value.filter(r => qaStatus(r) !== '').length);
 
     const posInFiltered = computed(() => filteredIndices.value.indexOf(currentIdx.value));
 
-    function isReviewed(r) {
-      const v = r['Reviewed'];
-      return v === true || v === 'TRUE' || v === 1;
+    function qaStatus(r) {
+      const v = r[QA_COL];
+      if (v == null) return '';
+      const s = String(v).trim().toUpperCase();
+      if (s === 'Y' || s === 'N' || s === 'M') return s;
+      return '';
+    }
+
+    function qaStatusColor(r) {
+      const s = qaStatus(r);
+      if (s === 'Y') return 'bg-green-500';
+      if (s === 'M') return 'bg-amber-400';
+      if (s === 'N') return 'bg-red-400';
+      return 'bg-neutral-300';
     }
 
     function fmt(v) {
@@ -416,27 +461,24 @@ createApp({
       const missing = REQUIRED_COLUMNS.filter(c => !firstRowKeys.includes(c));
       if (missing.length > 0) {
         throw new Error('Missing required columns: ' + missing.join(', ') +
-          '. Make sure you are uploading a compatible review workbook.');
+          '. Make sure you are uploading a file produced by the eval generator.');
       }
 
       // Build column list preserving canonical order
       const seen = new Set();
       const cols = [];
       for (const c of COLUMNS) { cols.push(c); seen.add(c); }
-      for (const c of REVIEW_META_COLUMNS) { if (!seen.has(c)) { cols.push(c); seen.add(c); } }
       for (const k of firstRowKeys) {
         if (!seen.has(k) && k !== '__rowNum__' && k !== 'SN') { cols.push(k); seen.add(k); }
       }
-      // Ensure Reviewed columns
-      if (!seen.has('Reviewed')) { cols.push('Reviewed'); seen.add('Reviewed'); }
-      if (!seen.has('Reviewed At')) { cols.push('Reviewed At'); seen.add('Reviewed At'); }
+      if (!seen.has(QA_COL)) { cols.push(QA_COL); seen.add(QA_COL); }
 
       // Normalize rows
       const normalizedRows = json.map(r => {
         const out = {};
         for (const c of cols) out[c] = c in r ? r[c] : null;
-        if (!('Reviewed' in r)) out['Reviewed'] = false;
-        if (!('Reviewed At' in r)) out['Reviewed At'] = null;
+        // Default QA Approval Status to blank (not reviewed)
+        if (out[QA_COL] == null || String(out[QA_COL]).trim() === '') out[QA_COL] = '';
         return out;
       });
 
@@ -502,11 +544,8 @@ createApp({
       rows.value[currentIdx.value][col] = value;
     }
 
-    function toggleReviewed(checked) {
-      rows.value[currentIdx.value]['Reviewed'] = checked;
-      if (checked) {
-        rows.value[currentIdx.value]['Reviewed At'] = new Date().toISOString();
-      }
+    function setQaStatus(value) {
+      rows.value[currentIdx.value][QA_COL] = value;
     }
 
     // ---- save / download ----
@@ -577,8 +616,7 @@ createApp({
     }
 
     function markReviewedAndNext() {
-      rows.value[currentIdx.value]['Reviewed'] = true;
-      rows.value[currentIdx.value]['Reviewed At'] = new Date().toISOString();
+      rows.value[currentIdx.value][QA_COL] = 'Y';
       next();
     }
 
@@ -623,13 +661,13 @@ createApp({
       // state
       fileLoaded, currentFileName, columns, rows, originalJson,
       currentIdx, subtaskFilter, saveStatus, dragging, loadError,
-      recentFiles, responseCols,
+      recentFiles, responseCols, QA_OPTIONS,
       // computed
       subtaskOptions, filteredIndices, current, dirty, reviewedCount,
       posInFiltered,
       // methods
-      isReviewed, fmt, onFileInputChange, onDrop, goTo, next, prev,
-      setField, toggleReviewed, download, markReviewedAndNext,
+      qaStatus, qaStatusColor, fmt, onFileInputChange, onDrop, goTo, next, prev,
+      setField, setQaStatus, download, markReviewedAndNext,
       revert, goHome
     };
   }
