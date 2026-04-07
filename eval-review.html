@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workbook Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { DEFAULT: '#C45421', 600: '#C45421', 500: '#DE8430' },
+            surface: '#F0F0F0'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+            serif: ['"Source Serif 4"', '"Source Serif Pro"', 'Georgia', 'serif']
+          },
+          borderRadius: { pill: '9999px' }
+        }
+      }
+    }
+  </script>
+  <style>
+    [v-cloak] { display: none; }
+    html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    h1, h2, h3 { font-family: 'Source Serif 4', 'Source Serif Pro', Georgia, serif; }
+    textarea { font-family: Inter, system-ui, sans-serif; }
+  </style>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-white text-neutral-900 font-sans min-h-screen">
+
+<div id="app" v-cloak>
+
+  <!-- ========== HOME VIEW ========== -->
+  <template v-if="!fileLoaded">
+    <div class="mx-auto max-w-5xl px-6 py-12">
+      <header class="mb-8">
+        <h1 class="text-4xl font-bold tracking-tight">Workbook Review</h1>
+        <p class="mt-2 text-neutral-600">
+          Open a generated xlsx from your computer to start reviewing. Edit responses,
+          mark examples as reviewed, then download the updated file.
+        </p>
+      </header>
+
+      <!-- Upload zone -->
+      <section class="mb-10">
+        <button
+          type="button"
+          class="block w-full text-left rounded-2xl border-2 border-dashed p-8 transition-colors"
+          :class="dragging
+            ? 'border-brand bg-brand/5'
+            : 'border-neutral-300 bg-surface hover:border-brand hover:bg-brand/5'"
+          @dragover.prevent="dragging = true"
+          @dragleave="dragging = false"
+          @drop.prevent="onDrop"
+          @click="$refs.fileInput.click()"
+        >
+          <div class="flex items-center gap-4">
+            <div class="shrink-0 w-12 h-12 rounded-full bg-brand text-white flex items-center justify-center text-xl">
+              &uarr;
+            </div>
+            <div class="flex-1">
+              <div class="font-serif text-lg font-semibold">Drop xlsx files here, or click to browse</div>
+              <div class="text-sm text-neutral-600 mt-1">
+                Upload a compatible review workbook to begin.
+              </div>
+            </div>
+          </div>
+        </button>
+        <input
+          ref="fileInput"
+          type="file"
+          accept=".xlsx,.csv"
+          class="hidden"
+          @change="onFileInputChange"
+        />
+        <div v-if="loadError" class="mt-3 bg-white border border-red-300 rounded-xl p-3 bg-red-50 text-sm text-red-800">
+          {{ loadError }}
+        </div>
+      </section>
+
+      <!-- Recent files (from localStorage) -->
+      <section v-if="recentFiles.length > 0">
+        <h2 class="text-xl font-semibold mb-3">Recent files</h2>
+        <ul class="space-y-2">
+          <li v-for="rf in recentFiles" :key="rf.name"
+              class="bg-white border border-neutral-200 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <div class="font-serif font-semibold">{{ rf.name }}</div>
+              <div class="text-xs text-neutral-500">{{ rf.rows }} examples &middot; {{ rf.reviewed }} reviewed &middot; opened {{ rf.date }}</div>
+            </div>
+            <span class="text-xs text-neutral-400">Open the file again to continue</span>
+          </li>
+        </ul>
+      </section>
+    </div>
+  </template>
+
+  <!-- ========== REVIEW VIEW ========== -->
+  <template v-else>
+    <!-- Top bar -->
+    <div class="sticky top-0 z-20 bg-white border-b border-neutral-200">
+      <div class="px-6 py-3 flex items-center gap-4 flex-wrap">
+        <button @click="goHome" class="text-sm text-neutral-500 hover:text-brand">&larr; Files</button>
+        <div class="min-w-0 flex-1">
+          <div class="text-sm font-mono truncate" :title="currentFileName">{{ currentFileName }}</div>
+          <div class="text-xs text-neutral-500">{{ reviewedCount }} / {{ rows.length }} reviewed</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-surface text-neutral-900 hover:bg-neutral-200"
+                  @click="prev" :disabled="posInFiltered <= 0">
+            &larr; Prev
+          </button>
+          <div class="text-sm tabular-nums text-neutral-600 px-2">
+            {{ posInFiltered + 1 }} / {{ filteredIndices.length }}
+          </div>
+          <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-surface text-neutral-900 hover:bg-neutral-200"
+                  @click="next" :disabled="posInFiltered >= filteredIndices.length - 1">
+            Next &rarr;
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <span v-if="saveStatus === 'saved' && !dirty" class="text-xs text-green-600">Saved</span>
+          <span v-else-if="dirty" class="text-xs text-amber-600">Unsaved changes</span>
+          <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-surface text-neutral-900 hover:bg-neutral-200"
+                  @click="revert" :disabled="!dirty">Revert</button>
+          <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-surface text-neutral-900 hover:bg-neutral-200"
+                  @click="download" :disabled="!dirty">Save &darr;</button>
+          <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-brand text-white hover:bg-brand-500"
+                  @click="markReviewedAndNext">
+            Mark reviewed &amp; next
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex">
+      <!-- Left rail -->
+      <aside class="w-72 shrink-0 border-r border-neutral-200 h-[calc(100vh-65px)] sticky top-[65px] overflow-y-auto">
+        <div class="p-4 border-b border-neutral-200">
+          <label class="text-xs font-medium uppercase tracking-wide text-neutral-500" for="subtask-filter">Filter by subtask</label>
+          <select id="subtask-filter"
+                  class="mt-1 w-full text-sm rounded border-neutral-300 bg-white"
+                  v-model="subtaskFilter">
+            <option value="">All subtasks</option>
+            <option v-for="id in subtaskOptions" :key="id" :value="id">{{ id }}</option>
+          </select>
+        </div>
+        <ul>
+          <li v-for="idx in filteredIndices" :key="idx">
+            <button
+              class="w-full text-left px-4 py-2 border-b border-neutral-100 hover:bg-surface flex items-center gap-2"
+              :class="idx === currentIdx ? 'bg-brand/10' : ''"
+              @click="goTo(idx)">
+              <span class="w-2 h-2 rounded-full shrink-0"
+                    :class="isReviewed(rows[idx]) ? 'bg-brand' : 'bg-neutral-300'"></span>
+              <div class="min-w-0">
+                <div class="text-xs font-mono truncate">{{ fmt(rows[idx]['Example ID']) }}</div>
+                <div class="text-xs text-neutral-500 truncate">{{ fmt(rows[idx]['Subtask Name']) }}</div>
+              </div>
+            </button>
+          </li>
+        </ul>
+      </aside>
+
+      <!-- Main -->
+      <main class="flex-1 min-w-0 px-6 py-6 space-y-6" v-if="current">
+        <!-- Context card -->
+        <section class="bg-white border border-neutral-200 rounded-xl p-5">
+          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h2 class="text-2xl font-serif font-bold">{{ fmt(current['Subtask Name']) }}</h2>
+            <span class="text-sm font-mono text-neutral-500">{{ fmt(current['Example ID']) }}</span>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+            <span v-if="current['Grade'] != null" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface text-neutral-700">
+              Grade {{ fmt(current['Grade']) }}
+            </span>
+            <span v-if="current['Subject']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface text-neutral-700">
+              {{ fmt(current['Subject']) }}
+            </span>
+            <span v-if="current['Topic']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface text-neutral-700">
+              {{ fmt(current['Topic']) }}
+            </span>
+            <span v-if="current['Country']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface text-neutral-700">
+              {{ fmt(current['Country']) }}
+            </span>
+            <span v-if="current['User Prompt Quality']" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand/10 text-brand-600">
+              Quality: {{ fmt(current['User Prompt Quality']) }}
+            </span>
+          </div>
+
+          <div class="mt-5 grid gap-5 lg:grid-cols-2">
+            <div>
+              <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Realistic user prompt</div>
+              <p class="mt-1 text-sm whitespace-pre-wrap">{{ fmt(current['Realistic User Prompt']) }}</p>
+            </div>
+            <div>
+              <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Rendered template</div>
+              <p class="mt-1 text-sm whitespace-pre-wrap text-neutral-600">{{ fmt(current['Rendered Prompt']) }}</p>
+            </div>
+          </div>
+
+          <details v-if="current['Output Expectations']" class="mt-5">
+            <summary class="text-xs font-medium uppercase tracking-wide text-neutral-500 cursor-pointer">Output expectations</summary>
+            <pre class="mt-2 text-xs whitespace-pre-wrap font-sans text-neutral-700">{{ fmt(current['Output Expectations']) }}</pre>
+          </details>
+
+          <details v-if="current['Attachment Type'] && current['Attachment Type'] !== 'None'" class="mt-3">
+            <summary class="text-xs font-medium uppercase tracking-wide text-neutral-500 cursor-pointer">
+              Attachment ({{ fmt(current['Attachment Type']) }})
+            </summary>
+            <p v-if="current['Attachment Description']" class="mt-2 text-xs text-neutral-600">{{ fmt(current['Attachment Description']) }}</p>
+            <pre v-if="current['Attachment Text']" class="mt-2 text-xs whitespace-pre-wrap font-sans text-neutral-700 bg-surface p-3 rounded">{{ fmt(current['Attachment Text']) }}</pre>
+          </details>
+        </section>
+
+        <!-- Groundtruth answer -->
+        <section v-if="current['Groundtruth Answer']" class="bg-white border border-neutral-200 rounded-xl p-5">
+          <div class="text-xs font-medium uppercase tracking-wide text-neutral-500">Groundtruth Answer</div>
+          <p class="mt-1 text-sm whitespace-pre-wrap">{{ fmt(current['Groundtruth Answer']) }}</p>
+        </section>
+
+        <!-- 3-col editors -->
+        <section class="grid gap-4 lg:grid-cols-3">
+          <div v-for="col in responseCols" :key="col.key"
+               class="bg-white border-2 rounded-xl p-4" :class="col.tone">
+            <h3 class="font-serif font-semibold text-lg">{{ col.key }}</h3>
+            <label class="text-xs font-medium uppercase tracking-wide text-neutral-500 mt-3 block"
+                   :for="col.key + '-response'">Response</label>
+            <textarea
+              :id="col.key + '-response'"
+              class="mt-1 w-full min-h-[14rem] text-sm rounded border-neutral-300 bg-white p-2 focus:border-brand focus:ring-brand"
+              :value="fmt(current[col.key + ' Response'])"
+              @input="setField(col.key + ' Response', $event.target.value)"
+            ></textarea>
+            <label class="text-xs font-medium uppercase tracking-wide text-neutral-500 mt-3 block"
+                   :for="col.key + '-just'">Justification</label>
+            <textarea
+              :id="col.key + '-just'"
+              class="mt-1 w-full min-h-[7rem] text-sm rounded border-neutral-300 bg-white p-2 focus:border-brand focus:ring-brand"
+              :value="fmt(current[col.key + ' Justification'])"
+              @input="setField(col.key + ' Justification', $event.target.value)"
+            ></textarea>
+          </div>
+        </section>
+
+        <!-- Reviewer notes -->
+        <section class="bg-white border border-neutral-200 rounded-xl p-5">
+          <label class="text-xs font-medium uppercase tracking-wide text-neutral-500" for="reviewer-notes">Reviewer notes</label>
+          <textarea
+            id="reviewer-notes"
+            class="mt-1 w-full min-h-[6rem] text-sm rounded border-neutral-300 bg-white p-2 focus:border-brand focus:ring-brand"
+            :value="fmt(current['Reviewer Notes'])"
+            @input="setField('Reviewer Notes', $event.target.value)"
+          ></textarea>
+          <div class="mt-3 flex items-center gap-2 text-sm">
+            <input type="checkbox" id="reviewed"
+                   :checked="isReviewed(current)"
+                   @change="toggleReviewed($event.target.checked)" />
+            <label for="reviewed">Mark as reviewed</label>
+          </div>
+        </section>
+      </main>
+    </div>
+  </template>
+
+</div>
+
+<script>
+const { createApp, ref, computed, watch, onMounted, onUnmounted, nextTick, toRaw } = Vue;
+
+const COLUMNS = [
+  'Task ID','Task Letter','Task Name','Subtask ID','Subtask Name',
+  'Subtask Template Prompt','Subtask Grade Restrictions','Subtask Subject Restrictions',
+  'Example ID','Grade','Subject','Topic','Learning Objective','Country',
+  'Attachment Type','Attachment Description','Attachment Text','Attachment Media',
+  'Groundtruth Answer','Rendered Prompt','User Prompt Quality','Realistic User Prompt',
+  'Output Expectations','Good Response','Good Justification','Okay Response',
+  'Okay Justification','Bad Response','Bad Justification','Reviewer Notes'
+];
+const REVIEW_META_COLUMNS = ['Reviewed', 'Reviewed At'];
+const REQUIRED_COLUMNS = ['Example ID', 'Good Response', 'Okay Response', 'Bad Response'];
+
+function sessionTimestamp(d) {
+  d = d || new Date();
+  const pad = (n) => n.toString().padStart(2, '0');
+  return d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) +
+         '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+}
+
+createApp({
+  setup() {
+    // ---- state ----
+    const fileLoaded = ref(false);
+    const currentFileName = ref('');
+    const columns = ref([]);
+    const rows = ref([]);
+    const originalJson = ref('[]');
+    const currentIdx = ref(0);
+    const subtaskFilter = ref('');
+    const saveStatus = ref('idle');
+    const dragging = ref(false);
+    const loadError = ref(null);
+    const recentFiles = ref([]);
+    const originalFileBuffer = ref(null);
+    const originalSheetName = ref('Sheet1');
+
+    const responseCols = [
+      { key: 'Good', tone: 'border-green-300 bg-green-50/40' },
+      { key: 'Okay', tone: 'border-amber-300 bg-amber-50/40' },
+      { key: 'Bad',  tone: 'border-red-300 bg-red-50/40' }
+    ];
+
+    // ---- load recent files from localStorage ----
+    try {
+      const stored = localStorage.getItem('gdi-review-recent');
+      if (stored) recentFiles.value = JSON.parse(stored);
+    } catch(e) {}
+
+    function saveRecent() {
+      const entry = {
+        name: currentFileName.value,
+        rows: rows.value.length,
+        reviewed: reviewedCount.value,
+        date: new Date().toLocaleDateString()
+      };
+      let list = recentFiles.value.filter(r => r.name !== entry.name);
+      list.unshift(entry);
+      if (list.length > 10) list = list.slice(0, 10);
+      recentFiles.value = list;
+      try { localStorage.setItem('gdi-review-recent', JSON.stringify(list)); } catch(e) {}
+    }
+
+    // ---- derived ----
+    const subtaskOptions = computed(() => {
+      const set = new Set();
+      for (const r of rows.value) {
+        const id = r['Subtask ID'];
+        if (id != null) set.add(String(id));
+      }
+      return Array.from(set).sort();
+    });
+
+    const filteredIndices = computed(() => {
+      const out = [];
+      for (let i = 0; i < rows.value.length; i++) {
+        if (!subtaskFilter.value || String(rows.value[i]['Subtask ID']) === subtaskFilter.value) out.push(i);
+      }
+      return out;
+    });
+
+    const current = computed(() => rows.value[currentIdx.value] || null);
+    const dirty = computed(() => JSON.stringify(rows.value) !== originalJson.value);
+    const reviewedCount = computed(() => rows.value.filter(r => isReviewed(r)).length);
+
+    const posInFiltered = computed(() => filteredIndices.value.indexOf(currentIdx.value));
+
+    function isReviewed(r) {
+      const v = r['Reviewed'];
+      return v === true || v === 'TRUE' || v === 1;
+    }
+
+    function fmt(v) {
+      if (v == null) return '';
+      return String(v);
+    }
+
+    function cloneWorkbookPart(value) {
+      const raw = typeof toRaw === 'function' ? toRaw(value) : value;
+      if (raw == null || typeof raw !== 'object') return raw;
+      if (Array.isArray(raw)) return raw.map(cloneWorkbookPart);
+      const out = {};
+      for (const [key, entry] of Object.entries(raw)) {
+        out[key] = cloneWorkbookPart(entry);
+      }
+      return out;
+    }
+
+    function cloneArrayBuffer(buf) {
+      return buf.slice(0);
+    }
+
+    function makeCell(value, templateCell) {
+      if (value == null || value === '') {
+        if (!templateCell?.s) return null;
+        return { t: 'z', s: templateCell.s };
+      }
+
+      let cell;
+      if (typeof value === 'number') cell = { t: 'n', v: value };
+      else if (typeof value === 'boolean') cell = { t: 'b', v: value };
+      else cell = { t: 'str', v: String(value) };
+
+      if (templateCell?.s != null) cell.s = templateCell.s;
+      if (templateCell?.z != null) cell.z = templateCell.z;
+      return cell;
+    }
+
+    // ---- file loading ----
+    function parseWorkbook(arrayBuffer, fileName) {
+      const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: false, cellStyles: true });
+      const sheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+
+      // Validate required columns
+      if (json.length === 0) throw new Error('The file has no data rows.');
+      const firstRowKeys = Object.keys(json[0]);
+      const missing = REQUIRED_COLUMNS.filter(c => !firstRowKeys.includes(c));
+      if (missing.length > 0) {
+        throw new Error('Missing required columns: ' + missing.join(', ') +
+          '. Make sure you are uploading a compatible review workbook.');
+      }
+
+      // Build column list preserving canonical order
+      const seen = new Set();
+      const cols = [];
+      for (const c of COLUMNS) { cols.push(c); seen.add(c); }
+      for (const c of REVIEW_META_COLUMNS) { if (!seen.has(c)) { cols.push(c); seen.add(c); } }
+      for (const k of firstRowKeys) {
+        if (!seen.has(k) && k !== '__rowNum__' && k !== 'SN') { cols.push(k); seen.add(k); }
+      }
+      // Ensure Reviewed columns
+      if (!seen.has('Reviewed')) { cols.push('Reviewed'); seen.add('Reviewed'); }
+      if (!seen.has('Reviewed At')) { cols.push('Reviewed At'); seen.add('Reviewed At'); }
+
+      // Normalize rows
+      const normalizedRows = json.map(r => {
+        const out = {};
+        for (const c of cols) out[c] = c in r ? r[c] : null;
+        if (!('Reviewed' in r)) out['Reviewed'] = false;
+        if (!('Reviewed At' in r)) out['Reviewed At'] = null;
+        return out;
+      });
+
+      return { workbook: wb, sheetName, columns: cols, rows: normalizedRows };
+    }
+
+    function loadFile(file) {
+      loadError.value = null;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const result = parseWorkbook(e.target.result, file.name);
+          originalFileBuffer.value = cloneArrayBuffer(e.target.result);
+          originalSheetName.value = result.sheetName;
+          columns.value = result.columns;
+          rows.value = result.rows;
+          originalJson.value = JSON.stringify(result.rows);
+          currentFileName.value = file.name;
+          currentIdx.value = 0;
+          subtaskFilter.value = '';
+          saveStatus.value = 'idle';
+          fileLoaded.value = true;
+          nextTick(() => saveRecent());
+        } catch (err) {
+          loadError.value = err.message;
+        }
+      };
+      reader.onerror = () => { loadError.value = 'Could not read file.'; };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function onFileInputChange(e) {
+      const file = e.target.files[0];
+      if (file) loadFile(file);
+      e.target.value = '';
+    }
+
+    function onDrop(e) {
+      dragging.value = false;
+      const file = e.dataTransfer?.files[0];
+      if (file) loadFile(file);
+    }
+
+    // ---- navigation ----
+    function goTo(idx) {
+      if (idx < 0 || idx >= rows.value.length) return;
+      currentIdx.value = idx;
+      nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    }
+
+    function next() {
+      const i = posInFiltered.value;
+      if (i >= 0 && i < filteredIndices.value.length - 1) goTo(filteredIndices.value[i + 1]);
+    }
+
+    function prev() {
+      const i = posInFiltered.value;
+      if (i > 0) goTo(filteredIndices.value[i - 1]);
+    }
+
+    // ---- editing ----
+    function setField(col, value) {
+      rows.value[currentIdx.value][col] = value;
+    }
+
+    function toggleReviewed(checked) {
+      rows.value[currentIdx.value]['Reviewed'] = checked;
+      if (checked) {
+        rows.value[currentIdx.value]['Reviewed At'] = new Date().toISOString();
+      }
+    }
+
+    // ---- save / download ----
+    function buildWorkbook() {
+      const wb = XLSX.read(cloneArrayBuffer(originalFileBuffer.value), {
+        type: 'array',
+        cellDates: false,
+        cellStyles: true
+      });
+      const sheetName = originalSheetName.value || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const cols = columns.value;
+      const rowCount = rows.value.length + 1;
+      const prevRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+      const prevColCount = prevRange.e.c + 1;
+
+      if (ws['!cols'] && ws['!cols'].length < cols.length) {
+        const fallbackCol = cloneWorkbookPart(ws['!cols'][ws['!cols'].length - 1] || {});
+        while (ws['!cols'].length < cols.length) ws['!cols'].push(cloneWorkbookPart(fallbackCol));
+      }
+
+      for (let c = 0; c < cols.length; c++) {
+        const headerAddress = XLSX.utils.encode_cell({ r: 0, c });
+        const headerTemplate = ws[headerAddress] || ws[XLSX.utils.encode_cell({ r: 0, c: Math.min(c, prevColCount - 1) })];
+        ws[headerAddress] = makeCell(cols[c], headerTemplate);
+      }
+
+      for (let r = 0; r < rows.value.length; r++) {
+        const rowData = rows.value[r];
+        for (let c = 0; c < cols.length; c++) {
+          const address = XLSX.utils.encode_cell({ r: r + 1, c });
+          const templateAddress = XLSX.utils.encode_cell({ r: r + 1, c: Math.min(c, prevColCount - 1) });
+          const templateCell = ws[address] || ws[templateAddress];
+          const cell = makeCell(rowData[cols[c]], templateCell);
+          if (cell) ws[address] = cell;
+          else delete ws[address];
+        }
+      }
+
+      const maxCol = cols.length - 1;
+      ws['!ref'] = XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: rowCount - 1, c: maxCol }
+      });
+      return wb;
+    }
+
+    function download() {
+      const wb = buildWorkbook();
+      const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+      // Generate filename: strip old Reviewed suffix, add new timestamp
+      const stem = currentFileName.value.replace(/\.xlsx$/i, '');
+      const baseKey = stem.replace(/ Reviewed \d{8}_\d{6}$/, '');
+      const outName = baseKey + ' Reviewed ' + sessionTimestamp() + '.xlsx';
+
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = outName;
+      a.click();
+      URL.revokeObjectURL(a.href);
+
+      originalJson.value = JSON.stringify(rows.value);
+      currentFileName.value = outName;
+      saveStatus.value = 'saved';
+      saveRecent();
+    }
+
+    function markReviewedAndNext() {
+      rows.value[currentIdx.value]['Reviewed'] = true;
+      rows.value[currentIdx.value]['Reviewed At'] = new Date().toISOString();
+      next();
+    }
+
+    function revert() {
+      if (!confirm('Discard all unsaved changes on every example in this file?')) return;
+      rows.value = JSON.parse(originalJson.value);
+    }
+
+    function goHome() {
+      if (dirty.value && !confirm('You have unsaved changes. Leave without saving?')) return;
+      fileLoaded.value = false;
+    }
+
+    // ---- keyboard shortcuts ----
+    function onKeydown(e) {
+      const tag = e.target?.tagName;
+      const inField = tag === 'TEXTAREA' || tag === 'INPUT';
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (fileLoaded.value && dirty.value) download();
+        return;
+      }
+      if (inField) return;
+      if (e.key === 'j') next();
+      else if (e.key === 'k') prev();
+    }
+
+    function onBeforeUnload(e) {
+      if (dirty.value) { e.preventDefault(); e.returnValue = ''; }
+    }
+
+    onMounted(() => {
+      window.addEventListener('keydown', onKeydown);
+      window.addEventListener('beforeunload', onBeforeUnload);
+    });
+    onUnmounted(() => {
+      window.removeEventListener('keydown', onKeydown);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    });
+
+    return {
+      // state
+      fileLoaded, currentFileName, columns, rows, originalJson,
+      currentIdx, subtaskFilter, saveStatus, dragging, loadError,
+      recentFiles, responseCols,
+      // computed
+      subtaskOptions, filteredIndices, current, dirty, reviewedCount,
+      posInFiltered,
+      // methods
+      isReviewed, fmt, onFileInputChange, onDrop, goTo, next, prev,
+      setField, toggleReviewed, download, markReviewedAndNext,
+      revert, goHome
+    };
+  }
+}).mount('#app');
+</script>
+
+</body>
+</html>
