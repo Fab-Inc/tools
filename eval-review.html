@@ -133,10 +133,6 @@
                   @click="revert" :disabled="!dirty">Revert</button>
           <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-surface text-neutral-900 hover:bg-neutral-200"
                   @click="download" :disabled="!dirty">Save &darr;</button>
-          <button class="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-medium transition-colors bg-brand text-white hover:bg-brand-500"
-                  @click="markReviewedAndNext">
-            Approve &amp; next
-          </button>
         </div>
       </div>
     </div>
@@ -616,7 +612,6 @@ createApp({
     }
 
     function markReviewedAndNext() {
-      rows.value[currentIdx.value][QA_COL] = 'Y';
       next();
     }
 
