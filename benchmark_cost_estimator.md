@@ -1,0 +1,1 @@
+An interactive cost estimator for LLM benchmarking pipelines that prices document generation and LLM-as-judge evaluation across multiple languages and models. Inputs cover words per document, tokens-per-word ratios per language, reasoning ratios, separate generation and judge pricing, and a model multiplier.
